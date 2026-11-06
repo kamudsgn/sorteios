@@ -11,6 +11,25 @@ O usuário cola o link, carrega os comentários, ajusta as regras (se precisar) 
 
 ---
 
+## Buscar comentários sem login: botão "Enviar para o sorteador"
+
+É o jeito mais simples e não exige conta de desenvolvedor, token nem API. Funciona com post de **qualquer** conta.
+
+1. No sorteador, clique em **Botão do Instagram** (topo) e siga a aba **Computador** ou **Celular** para instalar o favorito *Enviar para o sorteador*. Isso é feito só uma vez.
+2. Abra o post no **instagram.com**, no navegador onde você já usa o Instagram.
+3. Clique no favorito. Uma aba do sorteador abre e recebe os comentários e as respostas. O progresso aparece no canto da página do Instagram.
+
+Como funciona: o favorito lê os comentários que o seu próprio navegador já consegue ver, ou seja, a mesma visão de quando você abre o post, e entrega para a aba do sorteador por `postMessage`. O sorteador só aceita mensagens vindas de `instagram.com` e revalida todos os dados no servidor.
+
+Limitações, para ficar transparente:
+- **É uma leitura não oficial.** O Instagram não aprova automação, e o botão pode precisar de ajuste se o site mudar.
+- O Instagram só mostra os comentários para quem está **logado no site**, no navegador em que o botão é usado.
+- No celular, o post precisa ser aberto no **navegador** (Safari ou Chrome), não no app.
+- O botão vai devagar e pausa quando o Instagram pede. Se a leitura parar antes do fim, o sorteio fica marcado como **coleta parcial**, com o motivo.
+- A publicação aparece como *"Lido pelo navegador · fonte não oficial"*.
+
+Teste local, com Instagram simulado e dados de teste: `node backend/test/fakeInstagramWeb.js 4020`. Depois abra `http://localhost:4020/p/TESTE123abc/`.
+
 ## ⚠️ O que a API oficial permite (leia antes)
 
 O Instagram **não oferece API oficial para ler comentários de qualquer publicação pública.**

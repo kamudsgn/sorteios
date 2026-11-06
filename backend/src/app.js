@@ -7,7 +7,7 @@ import { InstagramAuth } from './instagram/auth.js';
 import { parseInstagramUrl } from './instagram/url.js';
 import { resolveMedia, collectComments, mediaSummary } from './instagram/collector.js';
 import { buildPool, drawWinner, sanitizeSettings, animationSample } from './raffle/engine.js';
-import { parseImport } from './raffle/importer.js';
+import { parseImport, parseCollected } from './raffle/importer.js';
 import { winnersToCsv } from './raffle/exporter.js';
 import { SessionStore } from './sessions.js';
 import { createAccessGate } from './access.js';
@@ -30,7 +30,7 @@ export function createApp(cfg, { fetchImpl = fetch } = {}) {
     res.setHeader('Referrer-Policy', 'no-referrer');
     next();
   });
-  app.use('/api', express.json({ limit: '10mb' }), sessions.middleware());
+  app.use('/api', express.json({ limit: '40mb' }), sessions.middleware());
   // Proteção simples contra CSRF: requisições que alteram estado precisam ser JSON (não enviáveis por formulário de outro site).
   app.use('/api', (req, res, next) => {
     if (['POST', 'PUT', 'PATCH'].includes(req.method) && !req.is('application/json')) {
@@ -56,7 +56,7 @@ export function createApp(cfg, { fetchImpl = fetch } = {}) {
     next();
   });
 
-  const ownerOf = (s) => (s.source === 'instagram' ? s.post?.ownerUsername : null);
+  const ownerOf = (s) => (s.source === 'instagram' || s.source === 'browser' ? s.post?.ownerUsername : null);
   const poolOf = (s) => buildPool(s.comments, s.settings, { ownerUsername: ownerOf(s), winners: s.winners });
   const winnersView = (s) => s.winners.map((w, i) => ({ ...w, position: i + 1 }));
   const jobView = (j) => j && { id: j.id, status: j.status, phase: j.phase, message: j.message, progress: j.progress, error: j.error, startedAt: j.startedAt, finishedAt: j.finishedAt };
@@ -219,6 +219,14 @@ export function createApp(cfg, { fetchImpl = fetch } = {}) {
     };
     setPost(s, post, comments, 'import');
     res.json({ ...statePayload(s), importInfo: { imported: comments.length, rejected } });
+  });
+
+  // ── Comentários enviados pelo botão "Enviar para o sorteador" ─
+  app.post('/api/import-collected', (req, res) => {
+    const s = req.session;
+    const { post, comments, rejected } = parseCollected(req.body);
+    setPost(s, post, comments, 'browser');
+    res.json({ ...statePayload(s), importInfo: { imported: comments.length, rejected, partial: post.partial } });
   });
 
   // ── Configurações ──────────────────────────────────────────

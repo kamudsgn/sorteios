@@ -265,3 +265,36 @@ test('senha de acesso protege a API quando ACCESS_PASSWORD_HASH está definido',
   assert.equal(ok.status, 200);
   app.s.close();
 });
+
+test('comentários enviados pelo botão do navegador: validação, dono excluído, parcial', async () => {
+  const call = client(base);
+  const bad = await call('POST', '/api/import-collected', { post: { shortcode: '../x' }, comments: [] });
+  assert.equal(bad.data.error.code, 'COLLECT_INVALID');
+
+  const comments = [
+    { id: '1', username: 'teste_a', text: 'quero @amigo', timestamp: '2026-11-01T10:00:00Z', parentId: null },
+    { id: '1', username: 'teste_a', text: 'duplicado', parentId: null },
+    { id: '2', username: 'teste_b', text: 'eu', parentId: null },
+    { id: '3', username: 'dono_teste', text: 'obrigado', parentId: '1' },
+    { id: '4', username: 'nome inválido', text: 'x', parentId: null },
+  ];
+  const r = await call('POST', '/api/import-collected', {
+    post: { shortcode: 'TESTEBRW001', ownerUsername: 'dono_teste', caption: '[teste]', reportedCommentsCount: 5 },
+    comments,
+    partial: true,
+    partialReason: 'O Instagram limitou a leitura antes do fim.',
+  });
+  assert.equal(r.status, 200);
+  assert.equal(r.data.source, 'browser');
+  assert.equal(r.data.importInfo.imported, 3);
+  assert.equal(r.data.importInfo.rejected, 1);
+  assert.equal(r.data.post.partial, true);
+  assert.equal(r.data.post.permalink, 'https://www.instagram.com/p/TESTEBRW001/');
+  assert.equal(r.data.stats.excludedComments, 1, 'resposta do dono é excluída');
+  assert.equal(r.data.stats.tickets, 2);
+
+  // Mesmo post enviado de novo mantém o histórico
+  await call('POST', '/api/draw', {});
+  const again = await call('POST', '/api/import-collected', { post: { shortcode: 'TESTEBRW001', ownerUsername: 'dono_teste' }, comments });
+  assert.equal(again.data.winners.length, 1);
+});

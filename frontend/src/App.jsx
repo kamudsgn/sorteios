@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from './api.js';
 import { Header } from './components/Header.jsx';
 import { ConnectModal } from './components/ConnectModal.jsx';
+import { CollectorModal } from './components/CollectorModal.jsx';
+import { isTrustedCollectorOrigin } from './collector/bookmarklet.js';
 import { PostPanel } from './components/PostPanel.jsx';
 import { SettingsPanel } from './components/SettingsPanel.jsx';
 import { DrawStage } from './components/DrawStage.jsx';
@@ -22,7 +24,10 @@ export default function App() {
   const [stats, setStats] = useState(null);
   const [job, setJob] = useState(null);
   const [collectError, setCollectError] = useState(null);
-  const [modal, setModal] = useState(null); // 'participants' | 'import' | 'connect'
+  const [modal, setModal] = useState(null); // 'participants' | 'import' | 'connect' | 'collector'
+  const [collectorUrl, setCollectorUrl] = useState(null);
+  // Aba aberta pelo botão "Enviar para o sorteador" (lido antes de limpar a URL).
+  const [isReceiver] = useState(() => new URLSearchParams(window.location.search).get('receber') === '1' && Boolean(window.opener));
   const [drawing, setDrawing] = useState(false);
   const [reveal, setReveal] = useState(null);
   const [version, setVersion] = useState(0); // força recarregar a lista de participantes
@@ -33,8 +38,10 @@ export default function App() {
   const saveTimer = useRef(null);
   const pendingSave = useRef(Promise.resolve(true));
   const pendingState = useRef(null);
+  const stateRef = useRef(null);
 
   const applyState = useCallback((data) => {
+    stateRef.current = data;
     setState(data);
     setStats(data.stats);
     setSettings(data.settings);
@@ -61,6 +68,54 @@ export default function App() {
       .catch((e) => toast(e.message, 'error'));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ── Recebendo comentários do botão "Enviar para o sorteador" ──
+  useEffect(() => {
+    if (!isReceiver) return;
+    setCollectError(null);
+    setJob({ status: 'running', phase: 'waiting', message: 'Recebendo os comentários do Instagram…', progress: {} });
+    // Avisa a aba do Instagram que esta aba está pronta (a mensagem não contém dados).
+    const ping = () => { try { window.opener?.postMessage({ type: 'sorteador:ready' }, '*'); } catch { /* aba fechada */ } };
+    ping();
+    const timer = setInterval(ping, 1000);
+    let done = false;
+
+    const onMessage = async (e) => {
+      const d = e.data;
+      if (done || !d || d.source !== 'sorteador-coletor' || !isTrustedCollectorOrigin(e.origin)) return;
+      if (d.type === 'progress') {
+        setJob({ status: 'running', phase: 'collecting', message: d.message, progress: d.progress || {} });
+        return;
+      }
+      done = true;
+      clearInterval(timer);
+      setJob(null);
+      if (d.type === 'error') {
+        setCollectError({ code: 'COLLECT_BROWSER', message: d.message, hint: d.detail ? `Detalhe técnico: ${d.detail}` : undefined });
+        return;
+      }
+      if (d.type === 'data') {
+        const cur = stateRef.current;
+        if (cur?.winners?.length && cur.post?.shortcode !== d.post?.shortcode) {
+          const ok = await confirm({ title: 'Trocar de publicação?', message: 'Os comentários recebidos são de outra publicação. O histórico de ganhadores atual será apagado.', confirmLabel: 'Usar os novos comentários' });
+          if (!ok) return;
+        }
+        try {
+          const r = await api.importCollected({ post: d.post, comments: d.comments, partial: d.partial, partialReason: d.partialReason });
+          applyState(r);
+          setReveal(null);
+          toast(`${r.importInfo.imported} comentários recebidos do Instagram${r.importInfo.partial ? ' (coleta parcial)' : ''}.`, r.importInfo.partial ? 'error' : 'success');
+        } catch (err) {
+          setCollectError({ code: err.code, message: err.message, hint: err.hint });
+        }
+      }
+    };
+    window.addEventListener('message', onMessage);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('message', onMessage);
+    };
+  }, [isReceiver, applyState, confirm, toast]);
 
   // ── Coleta ────────────────────────────────────────────────
   const poll = useCallback(
@@ -112,6 +167,10 @@ export default function App() {
   };
 
   const connect = () => setModal('connect');
+  const openCollector = (url = null) => {
+    setCollectorUrl(url);
+    setModal('collector');
+  };
 
   const disconnect = async () => {
     await api.logout().catch(() => {});
@@ -235,10 +294,10 @@ export default function App() {
 
   return (
     <div className="app">
-      <Header auth={auth} onConnect={connect} onDisconnect={disconnect} onRefresh={refreshAuth} />
+      <Header auth={auth} onConnect={connect} onCollector={() => openCollector(null)} onDisconnect={disconnect} onRefresh={refreshAuth} />
       <main className="layout">
         <div className="col-side">
-          <PostPanel auth={auth} state={state} stats={stats} job={job} error={collectError} onLoad={load} onConnect={connect} onImport={() => setModal('import')} onReset={reset} />
+          <PostPanel auth={auth} state={state} stats={stats} job={job} error={collectError} onLoad={load} onConnect={connect} onCollector={openCollector} onImport={() => setModal('import')} onReset={reset} />
           <SettingsPanel settings={settings} stats={stats} source={state?.source} hasPost={hasPost} onChange={updateSettings} onOpenParticipants={() => setModal('participants')} />
         </div>
         <div className="col-main">
@@ -249,6 +308,7 @@ export default function App() {
 
       {modal === 'participants' && <ParticipantsModal excluded={settings.excluded} version={version} onToggleExclude={toggleExclude} onClose={() => setModal(null)} />}
       {modal === 'import' && <ImportModal onImport={importList} onClose={() => setModal(null)} />}
+      {modal === 'collector' && <CollectorModal postUrl={collectorUrl} toast={toast} onOfficial={() => setModal('connect')} onClose={() => setModal(null)} />}
       {modal === 'connect' && <ConnectModal auth={auth} toast={toast} onUpdated={(st) => { setAuth(st); setCollectError(null); }} onClose={() => setModal(null)} />}
       {confirmDialog}
       {toasts}

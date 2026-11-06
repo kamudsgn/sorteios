@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Icon, InstagramGlyph, Spinner, fmtDateTime } from './ui.jsx';
 
-export function Header({ auth, onConnect, onDisconnect, onRefresh }) {
+export function Header({ auth, onConnect, onCollector, onDisconnect, onRefresh }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   useEffect(() => {
@@ -28,8 +28,8 @@ export function Header({ auth, onConnect, onDisconnect, onRefresh }) {
     );
   else
     pill = (
-      <button className="btn btn-sm btn-outline" onClick={onConnect}>
-        <InstagramGlyph size={15} /> Conectar Instagram
+      <button className="btn btn-sm btn-outline" onClick={onCollector}>
+        <InstagramGlyph size={15} /> Botão do Instagram
       </button>
     );
 

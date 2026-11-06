@@ -68,3 +68,46 @@ export function parseImport(raw) {
   });
   return { comments, rejected };
 }
+
+const USER_RE = /^[A-Za-z0-9._]{1,30}$/;
+
+/**
+ * Comentários enviados pelo botão "Enviar para o sorteador" (lidos no navegador do usuário).
+ * Tudo é revalidado aqui: o servidor não confia no formato recebido.
+ */
+export function parseCollected(body) {
+  const post = body?.post || {};
+  const list = Array.isArray(body?.comments) ? body.comments : null;
+  if (!list) throw new AppError('COLLECT_INVALID', 'Nenhum comentário recebido do Instagram.');
+  const shortcode = String(post.shortcode || '');
+  if (!/^[A-Za-z0-9_-]{5,64}$/.test(shortcode)) throw new AppError('COLLECT_INVALID', 'Publicação inválida recebida do coletor.');
+
+  const byId = new Map();
+  let rejected = 0;
+  for (const c of list) {
+    const id = String(c?.id ?? '').slice(0, 64);
+    const username = String(c?.username ?? '');
+    if (!id || !USER_RE.test(username)) { rejected++; continue; }
+    if (byId.has(id)) continue;
+    const ts = c.timestamp && !Number.isNaN(Date.parse(c.timestamp)) ? new Date(c.timestamp).toISOString() : null;
+    byId.set(id, { id, username, text: String(c.text ?? '').slice(0, 5000), timestamp: ts, parentId: c.parentId ? String(c.parentId).slice(0, 64) : null, likeCount: 0 });
+  }
+  const owner = USER_RE.test(String(post.ownerUsername || '')) ? String(post.ownerUsername) : null;
+  const thumb = /^https:\/\/[^\s"']+$/.test(String(post.thumbnailUrl || '')) ? String(post.thumbnailUrl) : null;
+  return {
+    comments: [...byId.values()],
+    rejected,
+    post: {
+      id: `ig:${shortcode}`,
+      shortcode,
+      permalink: `https://www.instagram.com/p/${shortcode}/`,
+      caption: String(post.caption || '').slice(0, 2200),
+      thumbnailUrl: thumb,
+      ownerUsername: owner,
+      reportedCommentsCount: Number.isFinite(post.reportedCommentsCount) ? post.reportedCommentsCount : null,
+      collector: 'browser',
+      partial: Boolean(body.partial),
+      partialReason: body.partial ? String(body.partialReason || 'A coleta não chegou ao fim.').slice(0, 300) : null,
+    },
+  };
+}

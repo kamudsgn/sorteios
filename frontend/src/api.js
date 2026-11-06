@@ -40,6 +40,7 @@ export const api = {
   collect: (url) => request('POST', '/api/collect', { url }),
   job: (id) => request('GET', `/api/collect/${id}`),
   importList: (text, label) => request('POST', '/api/import', { text, label }),
+  importCollected: (payload) => request('POST', '/api/import-collected', payload),
   saveSettings: (settings) => request('PUT', '/api/settings', settings),
   participants: (params) => request('GET', `/api/participants?${new URLSearchParams(params)}`),
   draw: () => request('POST', '/api/draw', {}),
