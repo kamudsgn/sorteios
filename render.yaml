@@ -1,0 +1,30 @@
+# Blueprint do Render (plano Free). https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: sorteador-instagram
+    runtime: node
+    plan: free
+    region: virginia
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      # Hash (scrypt) da senha de acesso da página. A senha em si não fica no repositório.
+      - key: ACCESS_PASSWORD_HASH
+        value: scrypt$abeb1b1fa224ecbbd0380b19ef4e30a7$a84dc23d270a91ca01bb5bd089c9b9f50e50a17a2899965360869852b2be3f3c
+      # Preencha no painel do Render (Environment) — nunca no repositório:
+      - key: INSTAGRAM_ACCESS_TOKEN
+        sync: false
+      - key: IG_APP_ID
+        sync: false
+      - key: IG_APP_SECRET
+        sync: false
+      - key: IG_REDIRECT_URI
+        sync: false
