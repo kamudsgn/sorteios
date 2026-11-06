@@ -188,6 +188,60 @@ test('importação manual e proteção contra POST não-JSON', async () => {
   assert.equal(form.status, 415);
 });
 
+test('conectar pela página: colar token e continuar conectado após reinício do servidor', async () => {
+  const cfg = makeCfg('');
+  cfg.tokenSecret = 'segredo-de-teste';
+  const a = await startApp(cfg);
+  const post = (url, body, cookie = '') => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(cookie && { cookie }) }, body: JSON.stringify(body) });
+
+  assert.equal((await (await fetch(a.url + '/api/auth/status')).json()).connected, false);
+  assert.equal((await (await post(a.url + '/api/auth/token', { token: 'curto' })).json()).error.code, 'INVALID_TOKEN_FORMAT');
+  assert.equal((await (await post(a.url + '/api/auth/token', { token: 'IGAA' + 'x'.repeat(60) })).json()).error.code, 'TOKEN_INVALID');
+
+  const r = await post(a.url + '/api/auth/token', { token: `  ${TEST_TOKEN}  ` });
+  const body = await r.json();
+  assert.equal(body.connected, true);
+  assert.equal(body.account.username, 'conta_teste');
+  assert.equal(body.source, 'manual');
+  assert.equal(JSON.stringify(body).includes(TEST_TOKEN), false, 'token não volta para o navegador');
+  const cookie = r.headers.getSetCookie().map((c) => c.split(';')[0]).join('; ');
+  assert.equal(cookie.includes(TEST_TOKEN), false, 'cookie é criptografado');
+  a.s.close();
+
+  // "Reinício": nova instância, mesma TOKEN_SECRET, mesmo cookie do navegador
+  const b = await startApp(cfg);
+  const st = await (await fetch(b.url + '/api/auth/status', { headers: { cookie } })).json();
+  assert.equal(st.connected, true);
+  const job = await (await post(b.url + '/api/collect', { url: 'https://www.instagram.com/p/TESTE123abc/' }, cookie)).json();
+  assert.equal(job.job.status, 'running');
+
+  // Desconectar
+  const out = await post(b.url + '/api/auth/logout', {}, cookie);
+  const cookie2 = out.headers.getSetCookie().map((c) => c.split(';')[0]).join('; ');
+  assert.equal((await (await fetch(b.url + '/api/auth/status', { headers: { cookie: cookie2 } })).json()).connected, false);
+  b.s.close();
+});
+
+test('salvar dados do app da Meta habilita o botão "Entrar com Instagram"', async () => {
+  const cfg = makeCfg('');
+  cfg.tokenSecret = 'segredo-de-teste';
+  const a = await startApp(cfg);
+  const post = (body) => fetch(a.url + '/api/auth/app', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  assert.equal((await (await post({ appId: 'abc', appSecret: 'x' })).json()).error.code, 'INVALID_APP');
+  const r = await post({ appId: ' 123456789 ', appSecret: 'ab'.repeat(16) });
+  const st = await r.json();
+  assert.equal(st.appConfigured, true);
+  assert.equal(st.redirectUri, `${cfg.appUrl}/api/auth/callback`);
+  assert.equal(JSON.stringify(st).includes('ab'.repeat(16)), false, 'chave secreta não volta para o navegador');
+  const cookie = r.headers.getSetCookie().map((c) => c.split(';')[0]).join('; ');
+  const login = await fetch(a.url + '/api/auth/login', { redirect: 'manual', headers: { cookie } });
+  assert.equal(login.status, 302);
+  const loc = new URL(login.headers.get('location'));
+  assert.equal(loc.searchParams.get('client_id'), '123456789');
+  assert.equal(loc.searchParams.get('scope'), 'instagram_business_basic,instagram_business_manage_comments');
+  a.s.close();
+});
+
 test('senha de acesso protege a API quando ACCESS_PASSWORD_HASH está definido', async () => {
   const { randomBytes, scryptSync } = await import('node:crypto');
   const salt = randomBytes(8).toString('hex');

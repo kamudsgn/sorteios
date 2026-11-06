@@ -81,31 +81,24 @@ No app do Instagram: **Configurações → Tipo de conta e ferramentas → Mudar
 4. Em permissões, garanta **`instagram_business_basic`** e **`instagram_business_manage_comments`**.
 5. Enquanto o app estiver em modo de desenvolvimento, a conta do Instagram precisa ter uma função no app: **Funções do app → Funções → Adicionar Testador do Instagram**. Depois aceite o convite no Instagram em *Configurações → Apps e sites → Convites de testador*.
 
-Depois disso, escolha **uma** das opções:
+Depois disso, conecte **pela própria página**, sem mexer em código nem no Render. Clique em **Conectar Instagram** no topo e escolha uma das formas:
 
-### Opção A: token gerado no painel (mais simples)
+### Forma 1: botão "Entrar com Instagram" (recomendada)
+Configuração única:
+1. No painel do app: **Instagram → API setup with Instagram login → Set up Instagram business login**. Em *Redirect URL*, cole o endereço que a janela "Conectar Instagram" mostra (botão **Copiar**). Ex.: `https://sorteador-instagram-lrc9.onrender.com/api/auth/callback`
+2. Copie o **Instagram app ID** e o **Instagram app secret** dessa tela (são diferentes do App ID do Facebook) e cole na janela. Clique em **Salvar e ativar login**.
+
+A partir daí, conectar é só clicar em **Entrar com Instagram**: você faz login na página oficial do Instagram e volta conectado. O token de longa duração (60 dias) é **renovado automaticamente**.
+
+### Forma 2: colar um token
 1. Em **API setup with Instagram login → Generate access tokens**, clique em **Add account**, faça login e depois em **Generate token**.
-2. Copie o token para o `.env`:
-   ```env
-   INSTAGRAM_ACCESS_TOKEN=IGAA...
-   ```
-3. Reinicie o backend. O cabeçalho da interface mostra `@sua_conta` com um ponto verde.
+2. Na janela "Conectar Instagram", clique em **colar token**, cole e confirme. O sistema verifica o token na hora e mostra a conta conectada.
 
-> O token gerado no painel vale cerca de **60 dias**. Quando expirar, a interface avisa ("token inválido ou expirou"). Gere outro e troque no `.env`.
+### Onde a conexão fica guardada
+O token e os dados do app ficam num **cookie criptografado (AES-256-GCM)** neste navegador. Só o servidor consegue abrir, com a chave `TOKEN_SECRET` gerada automaticamente pelo Render. Por isso a conexão continua valendo mesmo quando o servidor gratuito "dorme" e reinicia. Em outro computador ou navegador, conecte de novo. O sistema **nunca pede a senha do Instagram**.
 
-### Opção B: botão "Conectar Instagram" (OAuth)
-1. Em **API setup with Instagram login → Set up Instagram business login**, cadastre a URL de redirecionamento:
-   `https://SEU-DOMINIO/api/auth/callback`
-   (precisa ser **HTTPS**; para testar localmente use um túnel como `ngrok http 3001`)
-2. Copie o **Instagram app ID** e o **Instagram app secret** (são diferentes do App ID do Facebook):
-   ```env
-   IG_APP_ID=...
-   IG_APP_SECRET=...
-   IG_REDIRECT_URI=https://SEU-DOMINIO/api/auth/callback
-   APP_URL=https://SEU-DOMINIO
-   ```
-3. Reinicie e clique em **Conectar Instagram**. O backend troca o código por um token de longa duração, guarda em `backend/data/instagram-token.json` (permissão 600, fora do frontend) e **renova automaticamente** quando faltam menos de 10 dias para expirar.
-
+> Também é possível configurar pelo servidor, com as variáveis `INSTAGRAM_ACCESS_TOKEN` ou `IG_APP_ID` + `IG_APP_SECRET` (+ `IG_REDIRECT_URI`) no `.env` ou no painel do Render.
+>
 > Para que contas **sem função no app** (clientes, por exemplo) possam conectar, o app precisa passar pela **Análise do App** da Meta com acesso avançado às duas permissões.
 
 ### Avançado: Facebook Login for Business
@@ -201,7 +194,7 @@ node backend/test/fakeGraph.js 4010 500
 Em outro terminal:
 
 ```bash
-IG_GRAPH_BASE=http://127.0.0.1:4010 IG_API_VERSION= INSTAGRAM_ACCESS_TOKEN=TEST_TOKEN_NAO_REAL DATA_DIR=/tmp/sorteio-demo APP_URL=http://localhost:3001 npm start
+IG_GRAPH_BASE=http://127.0.0.1:4010 IG_API_VERSION= INSTAGRAM_ACCESS_TOKEN=IGTEST_TOKEN_NAO_REAL_USADO_SOMENTE_EM_TESTES_0001 DATA_DIR=/tmp/sorteio-demo APP_URL=http://localhost:3001 npm start
 ```
 
 Abra http://localhost:3001 e carregue `https://www.instagram.com/p/TESTE123abc/`. **Use isso só para testes.** Em uso real, deixe `IG_GRAPH_BASE` no padrão.
@@ -212,8 +205,8 @@ Abra http://localhost:3001 e carregue `https://www.instagram.com/p/TESTE123abc/`
 
 | Mensagem | Causa / solução |
 |---|---|
-| *Nenhuma conta do Instagram conectada* | Preencha `INSTAGRAM_ACCESS_TOKEN` ou configure o OAuth e reinicie o backend |
-| *O token do Instagram é inválido ou expirou* | Gere um novo token (Opção A) ou clique em "Conectar Instagram" (Opção B) |
+| *Nenhuma conta do Instagram conectada* | Clique em **Conectar Instagram** no topo da página |
+| *O token do Instagram é inválido ou expirou* | Clique em **Conectar Instagram** e entre de novo |
 | *Esta publicação não pertence à conta conectada* | Limitação da API oficial. Conecte a conta dona do post ou use "Importar lista". |
 | *A conta conectada não tem permissão…* | Falta `instagram_business_manage_comments` ou a conta não é profissional |
 | *Limite de requisições da API…* | A Meta limita chamadas por hora. Aguarde alguns minutos e clique em "Atualizar comentários". |

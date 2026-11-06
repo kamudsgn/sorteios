@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from './api.js';
-import { Header, ConnectHelp } from './components/Header.jsx';
+import { Header } from './components/Header.jsx';
+import { ConnectModal } from './components/ConnectModal.jsx';
 import { PostPanel } from './components/PostPanel.jsx';
 import { SettingsPanel } from './components/SettingsPanel.jsx';
 import { DrawStage } from './components/DrawStage.jsx';
@@ -110,10 +111,7 @@ export default function App() {
     }
   };
 
-  const connect = () => {
-    if (auth?.oauthAvailable) window.location.href = '/api/auth/login';
-    else setModal('connect');
-  };
+  const connect = () => setModal('connect');
 
   const disconnect = async () => {
     await api.logout().catch(() => {});
@@ -251,7 +249,7 @@ export default function App() {
 
       {modal === 'participants' && <ParticipantsModal excluded={settings.excluded} version={version} onToggleExclude={toggleExclude} onClose={() => setModal(null)} />}
       {modal === 'import' && <ImportModal onImport={importList} onClose={() => setModal(null)} />}
-      {modal === 'connect' && <ConnectHelp onClose={() => setModal(null)} />}
+      {modal === 'connect' && <ConnectModal auth={auth} toast={toast} onUpdated={(st) => { setAuth(st); setCollectError(null); }} onClose={() => setModal(null)} />}
       {confirmDialog}
       {toasts}
     </div>

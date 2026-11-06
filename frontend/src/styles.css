@@ -345,3 +345,26 @@ p { margin: 0; }
 .gate-card h1 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
 .gate-mark { width: 40px; height: 40px; border-radius: 11px; }
 .gate-form { width: 100%; display: flex; flex-direction: column; gap: 10px; }
+
+/* ── Conectar Instagram ─────────────────────── */
+.connect { display: flex; flex-direction: column; gap: 14px; }
+.connect-main { display: flex; flex-direction: column; gap: 10px; padding: 6px 0; }
+.btn-ig {
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px; height: 52px; border-radius: 12px;
+  background: linear-gradient(100deg, #f9a03f 0%, #e1306c 50%, #833ab4 100%); color: #fff; font-weight: 650; font-size: 15px;
+  text-decoration: none; box-shadow: 0 10px 28px -10px rgba(225, 48, 108, .6); transition: transform .15s var(--ease), filter .2s;
+}
+.btn-ig:hover { transform: translateY(-1px); filter: saturate(1.1); }
+.center-block { align-self: center; }
+.connect-divider { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 12px; }
+.connect-divider::before, .connect-divider::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+.connect-setup { display: flex; flex-direction: column; gap: 4px; }
+.setup-head { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 8px; }
+.setup-head svg { margin-top: 3px; color: var(--accent); flex-shrink: 0; }
+.setup-steps { margin: 0 0 10px; padding-left: 20px; color: var(--text-2); display: flex; flex-direction: column; gap: 8px; line-height: 1.55; }
+.setup-steps a, .field-hint a { color: var(--text); }
+.copy-field { display: flex; align-items: center; gap: 8px; margin-top: 6px; padding: 6px 6px 6px 10px; background: var(--bg); border: 1px solid var(--line-2); border-radius: 9px; }
+.copy-field code { flex: 1; background: none; padding: 0; overflow-wrap: anywhere; font-size: 12px; }
+.setup-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.connect-foot { display: block; padding-top: 4px; border-top: 1px solid var(--line); padding-top: 12px; }
+.connect-foot svg { vertical-align: -2px; margin-right: 2px; }

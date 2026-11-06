@@ -2,7 +2,7 @@
 // Usado somente pelos testes automatizados e pela demonstração local — nunca em produção.
 import http from 'node:http';
 
-export const TEST_TOKEN = 'TEST_TOKEN_NAO_REAL';
+export const TEST_TOKEN = 'IGTEST_TOKEN_NAO_REAL_USADO_SOMENTE_EM_TESTES_0001';
 
 export function buildFixture({ comments = 120, owner = 'conta_teste' } = {}) {
   const list = [];

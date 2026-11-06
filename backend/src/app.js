@@ -11,6 +11,7 @@ import { parseImport } from './raffle/importer.js';
 import { winnersToCsv } from './raffle/exporter.js';
 import { SessionStore } from './sessions.js';
 import { createAccessGate } from './access.js';
+import { createVault, resolveSecret } from './vault.js';
 
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
@@ -20,6 +21,7 @@ export function createApp(cfg, { fetchImpl = fetch } = {}) {
   const secure = cfg.appUrl.startsWith('https://');
   const sessions = new SessionStore({ secure });
   const gate = createAccessGate(cfg.accessPasswordHash, { secure });
+  const vault = createVault(resolveSecret(cfg), { secure });
 
   app.disable('x-powered-by');
   if (cfg.isProd) app.set('trust proxy', 1); // atrás do proxy HTTPS do provedor
@@ -49,6 +51,10 @@ export function createApp(cfg, { fetchImpl = fetch } = {}) {
     res.json({ ok: true });
   });
   if (gate) app.use('/api', gate.middleware());
+  app.use('/api', (req, res, next) => {
+    req.ig = vault.read(req); // credenciais do Instagram conectadas por este navegador
+    next();
+  });
 
   const ownerOf = (s) => (s.source === 'instagram' ? s.post?.ownerUsername : null);
   const poolOf = (s) => buildPool(s.comments, s.settings, { ownerUsername: ownerOf(s), winners: s.winners });
@@ -82,12 +88,39 @@ export function createApp(cfg, { fetchImpl = fetch } = {}) {
   };
 
   // ── Conexão com o Instagram ────────────────────────────────
-  app.get('/api/auth/status', wrap(async (req, res) => res.json(await auth.status())));
+  app.get('/api/auth/status', wrap(async (req, res) => {
+    const refreshed = await auth.refreshIfNeeded(req.ig);
+    if (refreshed) {
+      req.ig = refreshed;
+      vault.write(res, refreshed);
+    }
+    res.json(await auth.status(req.ig));
+  }));
+
+  // Conectar colando um token gerado no painel da Meta
+  app.post('/api/auth/token', wrap(async (req, res) => {
+    const { creds } = await auth.connectWithToken(req.body?.token);
+    req.ig = { ...req.ig, ...creds };
+    vault.write(res, req.ig);
+    res.json(await auth.status(req.ig));
+  }));
+
+  // Salvar ID e chave secreta do app da Meta (habilita o botão "Entrar com Instagram")
+  app.post('/api/auth/app', wrap(async (req, res) => {
+    req.ig = { ...req.ig, ...auth.saveAppConfig(req.body?.appId, req.body?.appSecret) };
+    vault.write(res, req.ig);
+    res.json(await auth.status(req.ig));
+  }));
+  app.delete('/api/auth/app', wrap(async (req, res) => {
+    req.ig = { ...req.ig, appId: undefined, appSecret: undefined };
+    vault.write(res, req.ig);
+    res.json(await auth.status(req.ig));
+  }));
 
   app.get('/api/auth/login', (req, res, next) => {
     try {
       req.session.oauthState = randomBytes(16).toString('hex');
-      res.redirect(auth.loginUrl(req.session.oauthState));
+      res.redirect(auth.loginUrl(req.session.oauthState, req.ig));
     } catch (err) {
       next(err);
     }
@@ -101,7 +134,8 @@ export function createApp(cfg, { fetchImpl = fetch } = {}) {
       if (!state || state !== req.session.oauthState) throw new AppError('OAUTH_STATE', 'Sessão de autorização inválida. Tente conectar novamente.');
       if (!code) throw new AppError('OAUTH_FAILED', 'O Instagram não retornou o código de autorização.');
       req.session.oauthState = null;
-      await auth.handleCallback(code);
+      req.ig = { ...req.ig, ...(await auth.exchangeCode(code, req.ig)) };
+      vault.write(res, req.ig);
       back({ ig: 'connected' });
     } catch (err) {
       back({ ig_error: err instanceof AppError ? err.message : 'Falha ao conectar com o Instagram.' });
@@ -109,7 +143,8 @@ export function createApp(cfg, { fetchImpl = fetch } = {}) {
   });
 
   app.post('/api/auth/logout', (req, res) => {
-    auth.disconnect();
+    // Desconecta a conta, mas mantém os dados do app da Meta para entrar de novo com um clique.
+    vault.write(res, { appId: req.ig?.appId, appSecret: req.ig?.appSecret });
     res.json({ ok: true });
   });
 
@@ -128,7 +163,8 @@ export function createApp(cfg, { fetchImpl = fetch } = {}) {
     if (s.job?.status === 'running') return res.status(202).json({ job: jobView(s.job) });
 
     const parsed = parseInstagramUrl(req.body?.url);
-    const client = auth.client(); // falha cedo se não houver conta conectada
+    const creds = req.ig;
+    const client = auth.client(creds); // falha cedo se não houver conta conectada
 
     const job = { id: randomUUID(), status: 'running', phase: 'account', message: 'Verificando a conta conectada…', progress: {}, startedAt: new Date().toISOString() };
     s.job = job;
@@ -139,7 +175,7 @@ export function createApp(cfg, { fetchImpl = fetch } = {}) {
     };
 
     (async () => {
-      const account = await auth.account();
+      const account = await auth.account(creds);
       update({ phase: 'resolving', message: 'Procurando a publicação na conta…' });
       const media = await resolveMedia(client, parsed, account, update);
       update({ phase: 'collecting', message: 'Coletando comentários…' });

@@ -16,6 +16,8 @@ export function loadConfig(env = process.env) {
     // RENDER_EXTERNAL_URL é definido automaticamente pelo Render.
     appUrl: (env.APP_URL || env.RENDER_EXTERNAL_URL || `http://localhost:${port}`).replace(/\/$/, ''),
     accessPasswordHash: (env.ACCESS_PASSWORD_HASH || '').trim(),
+    // Chave que criptografa a conexão do Instagram guardada no navegador (gerada pelo Render).
+    tokenSecret: (env.TOKEN_SECRET || '').trim(),
     isProd: env.NODE_ENV === 'production',
     dataDir: env.DATA_DIR || path.join(ROOT_DIR, 'backend', 'data'),
     frontendDist: path.join(ROOT_DIR, 'frontend', 'dist'),
